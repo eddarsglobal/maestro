@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a MAESTRO capability or improvement
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should MAESTRO solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Core / Constitution
+        - Councils
+        - Orchestration
+        - Local Gateway
+        - Provider / Models
+        - Evidence
+        - Memory
+        - Security
+        - Testing
+        - Documentation
+        - maestro.men UI
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility / authority impact
+      description: Does this change Council authority, state, persistence or public APIs?

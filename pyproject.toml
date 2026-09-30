@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "maestro-core"
+version = "1.1.0"
+description = "Provider-agnostic deterministic orchestration kernel for MAESTRO / APTE."
+requires-python = ">=3.11"
+authors = [{name = "EDDARS / APTE"}]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+maestro = "maestro.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

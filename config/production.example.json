@@ -1,0 +1,21 @@
+{
+  "maestro_version": "1.0.0",
+  "runtime": {
+    "checkpoint_every_events": 10,
+    "max_async_concurrency": 8,
+    "lease_seconds": 30
+  },
+  "lightness": {
+    "lazy_councils": true,
+    "binary_object_store": true,
+    "reference_first_context": true
+  },
+  "governance": {
+    "require_ay_system_verdict": true,
+    "require_ex_tx_authorization": true,
+    "human_approval_for_a4": true
+  },
+  "providers": {
+    "default": null
+  }
+}
