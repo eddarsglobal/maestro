@@ -44,3 +44,21 @@ __all__ = [
     "ResearchProviderStatus",
     "ResearchProviderRegistry",
 ]
+
+from .runtime_contracts import (
+    ResearchExecutionResult,
+    ResearchRequest,
+    ResearchRoutingDecision,
+)
+from .runtime import (
+    GovernedResearchRuntime,
+    ResearchRuntimeConfigurationError,
+)
+
+__all__ += [
+    "ResearchExecutionResult",
+    "ResearchRequest",
+    "ResearchRoutingDecision",
+    "GovernedResearchRuntime",
+    "ResearchRuntimeConfigurationError",
+]
