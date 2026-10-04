@@ -46,19 +46,29 @@ __all__ = [
 ]
 
 from .runtime_contracts import (
+    MAX_RESEARCH_FALLBACK_ATTEMPTS,
+    ResearchAttemptStatus,
+    ResearchExecutionAttempt,
     ResearchExecutionResult,
+    ResearchFallbackPolicy,
     ResearchRequest,
     ResearchRoutingDecision,
 )
 from .runtime import (
     GovernedResearchRuntime,
+    ResearchProvidersExhaustedError,
     ResearchRuntimeConfigurationError,
 )
 
 __all__ += [
+    "MAX_RESEARCH_FALLBACK_ATTEMPTS",
+    "ResearchAttemptStatus",
+    "ResearchExecutionAttempt",
     "ResearchExecutionResult",
+    "ResearchFallbackPolicy",
     "ResearchRequest",
     "ResearchRoutingDecision",
     "GovernedResearchRuntime",
+    "ResearchProvidersExhaustedError",
     "ResearchRuntimeConfigurationError",
 ]

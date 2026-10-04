@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -39,6 +40,16 @@ class ToolRegistry:
         self._handlers: dict[str, ToolHandler] = {}
         self.history: list[ToolInvocation] = []
 
+        self._invocation_receipt: ContextVar[
+            ToolInvocation | None
+        ] = ContextVar(
+            (
+                "maestro_tool_invocation_receipt_"
+                f"{id(self)}"
+            ),
+            default=None,
+        )
+
     def register(self, spec: ToolSpec, handler: ToolHandler) -> None:
         if spec.name in self._specs:
             raise ValueError(f"Duplicate tool: {spec.name}")
@@ -47,6 +58,28 @@ class ToolRegistry:
 
     def spec(self, name: str) -> ToolSpec:
         return self._specs[name]
+
+    def last_invocation_receipt(
+        self,
+    ) -> ToolInvocation | None:
+        """
+        Return the last ToolInvocation produced
+        in the current execution context.
+
+        The global history remains observational.
+        This receipt is the correlation primitive
+        for one synchronous/thread/async context.
+        """
+        return self._invocation_receipt.get()
+
+    def _record_invocation(
+        self,
+        invocation: ToolInvocation,
+    ) -> None:
+        self.history.append(invocation)
+        self._invocation_receipt.set(
+            invocation
+        )
 
     def allowed_tools(self, council: CouncilId) -> list[ToolSpec]:
         return [
@@ -64,6 +97,12 @@ class ToolRegistry:
         policy_approved: bool = False,
         human_approved: bool = False,
     ) -> Any:
+        # Prevent a previous invocation in this
+        # execution context from being mistaken
+        # for the current one if this call fails
+        # before a ToolInvocation is recorded.
+        self._invocation_receipt.set(None)
+
         if tool_name not in self._specs:
             raise KeyError(f"Unknown tool: {tool_name}")
 
@@ -71,7 +110,7 @@ class ToolRegistry:
         args = dict(arguments or {})
 
         if actor not in spec.allowed_councils:
-            self.history.append(
+            self._record_invocation(
                 ToolInvocation(
                     task_id, actor, tool_name, ToolExecutionStatus.DENIED, args,
                     error="Council not permitted to use tool.",
@@ -93,7 +132,7 @@ class ToolRegistry:
                 )
             )
         except Exception as exc:
-            self.history.append(
+            self._record_invocation(
                 ToolInvocation(
                     task_id, actor, tool_name, ToolExecutionStatus.DENIED, args,
                     error=str(exc),
@@ -104,7 +143,7 @@ class ToolRegistry:
         try:
             result = self._handlers[tool_name](**args)
         except Exception as exc:
-            self.history.append(
+            self._record_invocation(
                 ToolInvocation(
                     task_id, actor, tool_name, ToolExecutionStatus.FAILED, args,
                     error=str(exc),
@@ -112,7 +151,7 @@ class ToolRegistry:
             )
             raise
 
-        self.history.append(
+        self._record_invocation(
             ToolInvocation(
                 task_id, actor, tool_name, ToolExecutionStatus.EXECUTED, args,
                 result_summary=result,

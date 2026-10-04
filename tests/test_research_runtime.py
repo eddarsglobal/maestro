@@ -11,6 +11,7 @@ from maestro.research import (
     ResearchProviderDescriptor,
     ResearchProviderRegistry,
     ResearchProviderStatus,
+    ResearchProvidersExhaustedError,
     ResearchRequest,
     ResearchRuntimeConfigurationError,
 )
@@ -504,7 +505,7 @@ class GovernedResearchRuntimeTests(
             ToolExecutionStatus.EXECUTED,
         )
 
-    def test_handler_failure_is_recorded_and_propagated(self):
+    def test_handler_failure_is_recorded_and_exhaustion_preserves_cause(self):
         providers = (
             ResearchProviderRegistry()
         )
@@ -530,16 +531,46 @@ class GovernedResearchRuntimeTests(
             tools,
         )
 
-        with self.assertRaisesRegex(
-            ValueError,
-            "provider failure",
-        ):
+        with self.assertRaises(
+            ResearchProvidersExhaustedError
+        ) as caught:
             runtime.execute(
                 ResearchRequest(
                     "TASK-12",
                     ResearchCapability.SEARCH,
                 )
             )
+
+        self.assertEqual(
+            len(caught.exception.attempts),
+            1,
+        )
+
+        self.assertEqual(
+            caught.exception.attempts[
+                0
+            ].provider_id,
+            "alpha",
+        )
+
+        self.assertEqual(
+            caught.exception.attempts[
+                0
+            ].error_type,
+            "ValueError",
+        )
+
+        self.assertIsInstance(
+            caught.exception.__cause__,
+            ValueError,
+        )
+
+        self.assertEqual(
+            str(
+                caught.exception.__cause__
+            ),
+            "provider failure",
+        )
 
         self.assertEqual(
             tools.history[-1].status,
