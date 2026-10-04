@@ -16,6 +16,14 @@ from .durable_store import (
     ResearchEvidenceStore,
     ResearchEvidenceStoreError,
 )
+from .provider_contracts import (
+    ResearchCapability,
+    ResearchProviderDescriptor,
+    ResearchProviderStatus,
+)
+from .provider_registry import (
+    ResearchProviderRegistry,
+)
 
 
 __all__ = [
@@ -31,4 +39,8 @@ __all__ = [
     "ResearchEvidenceCorruptionError",
     "ResearchEvidenceStore",
     "ResearchEvidenceStoreError",
+    "ResearchCapability",
+    "ResearchProviderDescriptor",
+    "ResearchProviderStatus",
+    "ResearchProviderRegistry",
 ]
