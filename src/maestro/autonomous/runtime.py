@@ -7,6 +7,13 @@ from maestro import MaestroKernel
 from maestro.enums import CouncilId
 from maestro.models import Mission
 from maestro.orchestration.dag import DagNode
+from maestro.research.composition import (
+    GovernedResearchComposition,
+    compose_governed_web_research,
+)
+from maestro.research.web_fetch import (
+    GovernedWebFetchBinding,
+)
 
 from .event_store import EventStore, RuntimeEvent
 from .mission_store import MissionStore
@@ -24,11 +31,47 @@ class AutonomousRuntime:
     Important: autonomy operates *inside* constitutional limits.
     """
 
-    def __init__(self, runtime_dir: str | Path):
+    def __init__(
+        self,
+        runtime_dir: str | Path,
+        *,
+        web_research_binding: (
+            GovernedWebFetchBinding
+            | None
+        ) = None,
+    ):
+        if (
+            web_research_binding is not None
+            and not isinstance(
+                web_research_binding,
+                GovernedWebFetchBinding,
+            )
+        ):
+            raise TypeError(
+                "web_research_binding must be a "
+                "GovernedWebFetchBinding or None."
+            )
+
         self.runtime_dir = Path(runtime_dir)
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
 
         self.kernel = MaestroKernel()
+
+        self.research: (
+            GovernedResearchComposition
+            | None
+        ) = None
+
+        if web_research_binding is not None:
+            self.research = (
+                compose_governed_web_research(
+                    tools=self.kernel.tools,
+                    binding=(
+                        web_research_binding
+                    ),
+                )
+            )
+
         self.events = EventStore(self.runtime_dir / "events.jsonl")
         self.missions = MissionStore(self.runtime_dir / "missions")
         self.scheduler = RuntimeScheduler()
