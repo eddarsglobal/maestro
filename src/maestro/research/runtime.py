@@ -320,12 +320,16 @@ class GovernedResearchRuntime:
             return False
 
         return (
-            invocation.task_id
-            == task_id
+            invocation.task_ref
+            == self.tools.task_reference(
+                task_id
+            )
             and invocation.actor
             is CouncilId.RX
-            and invocation.tool_name
-            == tool_name
+            and invocation.tool_ref
+            == self.tools.tool_reference(
+                tool_name
+            )
             and invocation.status
             is ToolExecutionStatus.FAILED
         )

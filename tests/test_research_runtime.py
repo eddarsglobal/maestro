@@ -497,8 +497,10 @@ class GovernedResearchRuntimeTests(
             CouncilId.RX,
         )
         self.assertEqual(
-            invocation.tool_name,
-            "alpha.search",
+            invocation.tool_ref,
+            tools.tool_reference(
+                "alpha.search"
+            ),
         )
         self.assertEqual(
             invocation.status,
