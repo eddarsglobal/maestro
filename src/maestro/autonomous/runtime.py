@@ -3,6 +3,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from datetime import datetime, timezone
+
+from maestro.models import Evidence
+from maestro.research.contracts import (
+    ContentDigest,
+    ExternalArtifact,
+    ResearchClaim,
+    ResearchSource,
+    SourceProvenance,
+)
+from maestro.research.durable_store import (
+    ResearchEvidenceStore,
+)
+from maestro.research.evidence_bridge import (
+    ResearchEvidenceBridge,
+)
+from maestro.research.runtime import (
+    ResearchRequest,
+)
+from maestro.research.web_fetch import (
+    GOVERNED_WEB_FETCH_PROVIDER_ID,
+    GovernedWebFetchResult,
+)
+
 from maestro import MaestroKernel
 from maestro.enums import CouncilId
 from maestro.models import Mission
@@ -62,6 +86,11 @@ class AutonomousRuntime:
             | None
         ) = None
 
+        self.research_evidence: (
+            ResearchEvidenceStore
+            | None
+        ) = None
+
         if web_research_binding is not None:
             self.research = (
                 compose_governed_web_research(
@@ -72,6 +101,15 @@ class AutonomousRuntime:
                 )
             )
 
+            self.research_evidence = (
+                ResearchEvidenceStore(
+                    self.runtime_dir
+                    / "research_evidence.sqlite3"
+                )
+            )
+
+            self._hydrate_research_evidence()
+
         self.events = EventStore(self.runtime_dir / "events.jsonl")
         self.missions = MissionStore(self.runtime_dir / "missions")
         self.scheduler = RuntimeScheduler()
@@ -79,6 +117,234 @@ class AutonomousRuntime:
         self.executor = CouncilExecutor()
         self.shadow = LiveShadowEvaluator()
         self.recovery = RecoveryManager(self.missions, self.events)
+
+    def _hydrate_research_evidence(
+        self,
+    ) -> None:
+        """
+        Restore durable RX evidence into the
+        Kernel's ordinary EvidenceStore.
+
+        Hydration does not re-emit evidence events
+        and performs no network access.
+        """
+
+        if self.research_evidence is None:
+            return
+
+        for evidence_id in (
+            self.research_evidence.ids()
+        ):
+            evidence = (
+                self.research_evidence.get(
+                    evidence_id
+                )
+            )
+
+            try:
+                existing = (
+                    self.kernel.evidence.get(
+                        evidence_id
+                    )
+                )
+            except KeyError:
+                self.kernel.evidence.add(
+                    evidence
+                )
+                continue
+
+            if (
+                existing.to_dict()
+                != evidence.to_dict()
+            ):
+                raise RuntimeError(
+                    "Durable research evidence "
+                    "conflicts with Kernel evidence."
+                )
+
+    def research_fetch(
+        self,
+        mission: Mission,
+        url: str,
+    ) -> Evidence:
+        """
+        Execute one governed RX Web fetch for an
+        owned MAESTRO mission, convert the result
+        to ordinary Evidence, persist the RX
+        evidence, and expose the same Evidence to
+        the Kernel.
+
+        External content remains unverified.
+        """
+
+        if self.research is None:
+            raise RuntimeError(
+                "Web research is not activated."
+            )
+
+        if self.research_evidence is None:
+            raise RuntimeError(
+                "Durable research evidence "
+                "is not activated."
+            )
+
+        if not isinstance(
+            mission,
+            Mission,
+        ):
+            raise TypeError(
+                "mission must be a Mission."
+            )
+
+        if (
+            self.kernel.missions.get(
+                mission.task_id
+            )
+            is not mission
+        ):
+            raise ValueError(
+                "mission must be owned by "
+                "this runtime."
+            )
+
+        provider = (
+            self.research.providers
+            .descriptor(
+                GOVERNED_WEB_FETCH_PROVIDER_ID
+            )
+        )
+
+        capabilities = tuple(
+            provider.capabilities
+        )
+
+        if len(capabilities) != 1:
+            raise RuntimeError(
+                "Governed Web provider must "
+                "expose exactly one capability."
+            )
+
+        result = (
+            self.research.runtime.execute(
+                ResearchRequest(
+                    task_id=mission.task_id,
+                    capability=capabilities[0],
+                    arguments={
+                        "url": url,
+                    },
+                )
+            )
+        )
+
+        if (
+            result.provider_id
+            != GOVERNED_WEB_FETCH_PROVIDER_ID
+        ):
+            raise RuntimeError(
+                "Governed Web provider "
+                "identity mismatch."
+            )
+
+        output = result.output
+
+        if not isinstance(
+            output,
+            GovernedWebFetchResult,
+        ):
+            raise TypeError(
+                "Governed Web FETCH returned "
+                "an invalid result."
+            )
+
+        now = (
+            datetime.now(
+                timezone.utc
+            )
+            .isoformat()
+        )
+
+        source = ResearchSource(
+            output.final_url,
+            label="Governed Web source",
+        )
+
+        provenance = SourceProvenance(
+            source_id=source.source_id,
+            retrieved_at=now,
+            digest=(
+                ContentDigest.from_bytes(
+                    output.body
+                )
+            ),
+        )
+
+        artifact = ExternalArtifact(
+            source=source,
+            provenance=provenance,
+            artifact_kind="DOCUMENT",
+            media_type=(
+                output.content_type
+                or "application/octet-stream"
+            ),
+        )
+
+        claim = ResearchClaim(
+            statement=(
+                "RX observed a governed "
+                "Web response."
+            ),
+            artifact_ids=(
+                artifact.artifact_id,
+            ),
+            created_at=now,
+        )
+
+        evidence = (
+            ResearchEvidenceBridge
+            .to_evidence(
+                task_id=mission.task_id,
+                claim=claim,
+                artifacts=[
+                    artifact
+                ],
+            )
+        )
+
+        # Durable first: a process interruption
+        # after this point remains recoverable
+        # through hydration on restart.
+        self.research_evidence.record(
+            evidence
+        )
+
+        self.kernel.add_evidence(
+            evidence
+        )
+
+        self.events.append(
+            RuntimeEvent(
+                mission.task_id,
+                "RESEARCH_EVIDENCE_RECORDED",
+                "RX",
+                {
+                    "evidence_id": (
+                        evidence.evidence_id
+                    ),
+                    "source_ref": (
+                        evidence.source_ref
+                    ),
+                    "status": output.status,
+                    "body_sha256": (
+                        output.body_sha256
+                    ),
+                    "body_size": (
+                        output.body_size
+                    ),
+                },
+            )
+        )
+
+        return evidence
 
     def create_mission(self, objective: str, scope: str = "", requested_output: str = "") -> Mission:
         mission = self.kernel.create_mission(objective, scope, requested_output)
