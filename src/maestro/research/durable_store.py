@@ -11,6 +11,9 @@ from maestro.enums import CouncilId, EvidenceKind
 from maestro.models import Evidence
 
 from .contracts import TrustState
+from .identity import (
+    require_durable_research_task_id,
+)
 
 
 RESEARCH_EVIDENCE_SCHEMA = "maestro.research_evidence.v0.1"
@@ -104,6 +107,10 @@ def _validate_research_evidence(
         raise TypeError(
             "evidence must be an Evidence."
         )
+
+    require_durable_research_task_id(
+        evidence.task_id
+    )
 
     if evidence.council is not CouncilId.RX:
         raise ValueError(
@@ -648,6 +655,12 @@ class ResearchEvidenceStore:
         self,
         task_id: str,
     ) -> list[Evidence]:
+        task_id = (
+            require_durable_research_task_id(
+                task_id
+            )
+        )
+
         con = self._connect()
 
         try:

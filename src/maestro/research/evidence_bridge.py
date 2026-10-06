@@ -12,27 +12,9 @@ from .contracts import (
     ExternalArtifact,
     ResearchClaim,
 )
-
-
-def _require_task_id(value: str) -> str:
-    if not isinstance(value, str):
-        raise TypeError(
-            "task_id must be a string."
-        )
-
-    normalized = value.strip()
-
-    if not normalized:
-        raise ValueError(
-            "task_id must not be empty."
-        )
-
-    if "\x00" in normalized:
-        raise ValueError(
-            "task_id must not contain NUL."
-        )
-
-    return normalized
+from .identity import (
+    require_durable_research_task_id,
+)
 
 
 class ResearchEvidenceBridge:
@@ -56,8 +38,10 @@ class ResearchEvidenceBridge:
         claim: ResearchClaim,
         artifacts: Iterable[ExternalArtifact],
     ) -> Evidence:
-        task_id = _require_task_id(
-            task_id
+        task_id = (
+            require_durable_research_task_id(
+                task_id
+            )
         )
 
         if not isinstance(

@@ -196,17 +196,33 @@ class ResearchEvidenceBridgeTests(
             artifact
         )
 
+        secret = (
+            "customer@example.com"
+            "?token=RX03E2_BRIDGE_SECRET"
+        )
+
         for task_id in (
             "",
             "   ",
             "TASK-\x00BAD",
+            "TASK-short",
+            "task-ABCDEF012345",
+            "TASK-ABCDEF01234",
+            "TASK-ABCDEF0123456",
+            " TASK-ABCDEF012345",
+            "TASK-ABCDEF012345 ",
+            secret,
+            (
+                "TASK-"
+                + chr(0xD800)
+            ),
         ):
             with self.subTest(
-                task_id=task_id
+                task_id=repr(task_id)
             ):
                 with self.assertRaises(
                     ValueError
-                ):
+                ) as context:
                     (
                         ResearchEvidenceBridge
                         .to_evidence(
@@ -217,6 +233,13 @@ class ResearchEvidenceBridgeTests(
                             ],
                         )
                     )
+
+                self.assertNotIn(
+                    "RX03E2_BRIDGE_SECRET",
+                    str(
+                        context.exception
+                    ),
+                )
 
     def test_bridge_never_claims_verification(self):
         artifact = self.artifact()

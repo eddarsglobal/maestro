@@ -461,5 +461,169 @@ class ResearchEvidenceStoreTests(
                 store.record(evidence)
 
 
+
+    def test_record_rejects_noncanonical_task_id_before_persistence(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = (
+                Path(td)
+                / "research.sqlite3"
+            )
+
+            store = ResearchEvidenceStore(
+                path
+            )
+
+            secret = (
+                "customer@example.com"
+                "?token=RX03E2_STORE_SECRET"
+            )
+
+            invalid_ids = (
+                "",
+                "   ",
+                "TASK-short",
+                "task-ABCDEF012345",
+                "TASK-ABCDEF01234",
+                "TASK-ABCDEF0123456",
+                " TASK-ABCDEF012345",
+                "TASK-ABCDEF012345 ",
+                secret,
+                (
+                    "TASK-"
+                    + chr(0xD800)
+                ),
+            )
+
+            for task_id in invalid_ids:
+                evidence = self.evidence()
+                evidence.task_id = task_id
+
+                with self.subTest(
+                    task_id=repr(task_id)
+                ):
+                    with self.assertRaises(
+                        ValueError
+                    ) as context:
+                        store.record(
+                            evidence
+                        )
+
+                    self.assertNotIn(
+                        "RX03E2_STORE_SECRET",
+                        str(
+                            context.exception
+                        ),
+                    )
+
+            self.assertEqual(
+                store.count(),
+                0,
+            )
+
+            persisted = b"".join(
+                candidate.read_bytes()
+                for candidate
+                in path.parent.glob(
+                    "research.sqlite3*"
+                )
+                if candidate.is_file()
+            )
+
+            self.assertNotIn(
+                b"RX03E2_STORE_SECRET",
+                persisted,
+            )
+
+    def test_for_task_rejects_noncanonical_identity(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = ResearchEvidenceStore(
+                Path(td)
+                / "research.sqlite3"
+            )
+
+            secret = (
+                "https://example.com/"
+                "?token=RX03E2_LOOKUP_SECRET"
+            )
+
+            invalid_ids = (
+                "",
+                "   ",
+                "TASK-short",
+                "customer@example.com",
+                secret,
+                (
+                    "TASK-"
+                    + chr(0xD800)
+                ),
+            )
+
+            for task_id in invalid_ids:
+                with self.subTest(
+                    task_id=repr(task_id)
+                ):
+                    with self.assertRaises(
+                        ValueError
+                    ) as context:
+                        store.for_task(
+                            task_id
+                        )
+
+                    self.assertNotIn(
+                        "RX03E2_LOOKUP_SECRET",
+                        str(
+                            context.exception
+                        ),
+                    )
+
+    def test_durable_task_identity_is_not_silently_normalized(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = ResearchEvidenceStore(
+                Path(td)
+                / "research.sqlite3"
+            )
+
+            canonical = (
+                "TASK-ABCDEF012345"
+            )
+
+            evidence = self.evidence(
+                canonical
+            )
+
+            store.record(
+                evidence
+            )
+
+            rows = store.for_task(
+                canonical
+            )
+
+            self.assertEqual(
+                [
+                    row.evidence_id
+                    for row in rows
+                ],
+                [
+                    evidence.evidence_id
+                ],
+            )
+
+            for altered in (
+                " " + canonical,
+                canonical + " ",
+                canonical.lower(),
+            ):
+                with self.subTest(
+                    task_id=altered
+                ):
+                    with self.assertRaises(
+                        ValueError
+                    ):
+                        store.for_task(
+                            altered
+                        )
+
+
 if __name__ == "__main__":
     unittest.main()
