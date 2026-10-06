@@ -225,7 +225,10 @@ class ToolRegistry:
         message = (
             namespace.encode("ascii")
             + b"\x00"
-            + value.encode("utf-8")
+            + value.encode(
+                "utf-8",
+                errors="surrogatepass",
+            )
         )
 
         digest = hmac.new(

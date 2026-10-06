@@ -1013,5 +1013,309 @@ class ToolRegistryTests(unittest.TestCase):
         )
 
 
+
+    def test_task_reference_is_total_for_lone_surrogates(self):
+        registry = ToolRegistry()
+
+        for codepoint in (
+            0xD800,
+            0xDC00,
+        ):
+            value = (
+                "TASK-"
+                + chr(codepoint)
+                + "-RX03E1"
+            )
+
+            ref = registry.task_reference(
+                value
+            )
+
+            self.assertTrue(
+                ref.startswith(
+                    "taskref:"
+                )
+            )
+
+            self.assertEqual(
+                len(ref),
+                72,
+            )
+
+    def test_tool_reference_is_total_for_lone_surrogates(self):
+        registry = ToolRegistry()
+
+        for codepoint in (
+            0xD800,
+            0xDC00,
+        ):
+            value = (
+                "tool."
+                + chr(codepoint)
+                + ".rx03e1"
+            )
+
+            ref = registry.tool_reference(
+                value
+            )
+
+            self.assertTrue(
+                ref.startswith(
+                    "toolref:"
+                )
+            )
+
+            self.assertEqual(
+                len(ref),
+                72,
+            )
+
+    def test_valid_unicode_reference_matches_legacy_strict_utf8(self):
+        import hmac
+
+        registry = ToolRegistry()
+
+        samples = (
+            "TASK-123",
+            "TASK-é-漢字",
+            "TASK-🚀",
+        )
+
+        for value in samples:
+            strict_bytes = value.encode(
+                "utf-8"
+            )
+
+            for namespace, method in (
+                (
+                    "task",
+                    registry.task_reference,
+                ),
+                (
+                    "tool",
+                    registry.tool_reference,
+                ),
+            ):
+                message = (
+                    namespace.encode(
+                        "ascii"
+                    )
+                    + b"\x00"
+                    + strict_bytes
+                )
+
+                digest = hmac.new(
+                    registry._retention_reference_key,
+                    message,
+                    digestmod="sha256",
+                ).hexdigest()
+
+                expected = (
+                    f"{namespace}ref:{digest}"
+                )
+
+                self.assertEqual(
+                    method(value),
+                    expected,
+                )
+
+    def test_surrogate_task_id_invokes_and_retains_only_opaque_reference(self):
+        registry = ToolRegistry()
+
+        sensitive_task_id = (
+            "TASK-"
+            + chr(0xD800)
+            + "-RX03E1_TASK_SECRET"
+        )
+
+        registry.register(
+            ToolSpec(
+                name="rx0.3e1.task",
+                description="unicode totality",
+                capabilities=(
+                    "privacy.read",
+                ),
+                allowed_councils=frozenset(
+                    {
+                        CouncilId.IT,
+                    }
+                ),
+                side_effect_level=(
+                    SideEffectLevel.A0_READ_ONLY
+                ),
+            ),
+            lambda: "OK",
+        )
+
+        result = registry.invoke(
+            task_id=sensitive_task_id,
+            actor=CouncilId.IT,
+            tool_name="rx0.3e1.task",
+        )
+
+        self.assertEqual(
+            result,
+            "OK",
+        )
+
+        self.assertEqual(
+            len(registry.history),
+            1,
+        )
+
+        receipt = (
+            registry.last_invocation_receipt()
+        )
+
+        self.assertIsNotNone(
+            receipt
+        )
+
+        self.assertFalse(
+            hasattr(
+                receipt,
+                "task_id",
+            )
+        )
+
+        self.assertEqual(
+            receipt.task_ref,
+            registry.task_reference(
+                sensitive_task_id
+            ),
+        )
+
+        retained = repr(
+            (
+                receipt,
+                registry.history,
+            )
+        )
+
+        self.assertNotIn(
+            "RX03E1_TASK_SECRET",
+            retained,
+        )
+
+    def test_surrogate_tool_name_invokes_and_retains_only_opaque_reference(self):
+        registry = ToolRegistry()
+
+        sensitive_tool_name = (
+            "rx0.3e1."
+            + chr(0xDC00)
+            + ".RX03E1_TOOL_SECRET"
+        )
+
+        registry.register(
+            ToolSpec(
+                name=sensitive_tool_name,
+                description="unicode totality",
+                capabilities=(
+                    "privacy.read",
+                ),
+                allowed_councils=frozenset(
+                    {
+                        CouncilId.IT,
+                    }
+                ),
+                side_effect_level=(
+                    SideEffectLevel.A0_READ_ONLY
+                ),
+            ),
+            lambda: "OK",
+        )
+
+        result = registry.invoke(
+            task_id="TASK-RX03E1",
+            actor=CouncilId.IT,
+            tool_name=sensitive_tool_name,
+        )
+
+        self.assertEqual(
+            result,
+            "OK",
+        )
+
+        self.assertEqual(
+            len(registry.history),
+            1,
+        )
+
+        receipt = (
+            registry.last_invocation_receipt()
+        )
+
+        self.assertIsNotNone(
+            receipt
+        )
+
+        self.assertFalse(
+            hasattr(
+                receipt,
+                "tool_name",
+            )
+        )
+
+        self.assertEqual(
+            receipt.tool_ref,
+            registry.tool_reference(
+                sensitive_tool_name
+            ),
+        )
+
+        retained = repr(
+            (
+                receipt,
+                registry.history,
+            )
+        )
+
+        self.assertNotIn(
+            "RX03E1_TOOL_SECRET",
+            retained,
+        )
+
+    def test_surrogate_references_preserve_namespace_and_registry_separation(self):
+        registry = ToolRegistry()
+        other_registry = ToolRegistry()
+
+        value = (
+            "IDENTITY-"
+            + chr(0xD800)
+            + "-RX03E1"
+        )
+
+        task_ref = (
+            registry.task_reference(
+                value
+            )
+        )
+
+        tool_ref = (
+            registry.tool_reference(
+                value
+            )
+        )
+
+        self.assertNotEqual(
+            task_ref,
+            tool_ref,
+        )
+
+        self.assertEqual(
+            task_ref,
+            registry.task_reference(
+                value
+            ),
+        )
+
+        self.assertNotEqual(
+            task_ref,
+            other_registry.task_reference(
+                value
+            ),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
