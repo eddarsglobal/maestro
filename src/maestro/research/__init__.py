@@ -240,3 +240,19 @@ __all__ += [
     "RadarReviewResponseInvariantError",
     "RadarReviewResponseValue",
 ]
+
+from .radar_evidence_followup import (
+    GovernedRadarEvidenceFollowUp,
+    RadarEvidenceFollowUp,
+    RadarEvidenceFollowUpInvariantError,
+    RadarEvidenceFollowUpNeed,
+    RadarEvidenceNeedKind,
+)
+
+__all__ += [
+    "GovernedRadarEvidenceFollowUp",
+    "RadarEvidenceFollowUp",
+    "RadarEvidenceFollowUpInvariantError",
+    "RadarEvidenceFollowUpNeed",
+    "RadarEvidenceNeedKind",
+]
