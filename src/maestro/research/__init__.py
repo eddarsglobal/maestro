@@ -86,3 +86,15 @@ __all__ += [
     "TechnologyRadar",
     "TechnologyRadarInvariantError",
 ]
+
+from .novelty_relevance import (
+    NoveltyRelevanceEvaluation,
+    NoveltyRelevanceEvaluator,
+    NoveltyRelevanceInvariantError,
+)
+
+__all__ += [
+    "NoveltyRelevanceEvaluation",
+    "NoveltyRelevanceEvaluator",
+    "NoveltyRelevanceInvariantError",
+]
