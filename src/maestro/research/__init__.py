@@ -146,3 +146,15 @@ __all__ += [
     "RadarFactorComposer",
     "RadarFactorCompositionInvariantError",
 ]
+
+from .radar_evaluation_pipeline import (
+    GovernedRadarEvaluationPipeline,
+    RadarEvaluationContext,
+    RadarEvaluationResult,
+)
+
+__all__ += [
+    "GovernedRadarEvaluationPipeline",
+    "RadarEvaluationContext",
+    "RadarEvaluationResult",
+]
