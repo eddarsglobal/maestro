@@ -256,3 +256,17 @@ __all__ += [
     "RadarEvidenceFollowUpNeed",
     "RadarEvidenceNeedKind",
 ]
+
+from .radar_followup_candidate import (
+    GovernedRadarFollowUpCandidateBuilder,
+    RadarFollowUpCandidate,
+    RadarFollowUpCandidateInvariantError,
+    RadarFollowUpCandidateSet,
+)
+
+__all__ += [
+    "GovernedRadarFollowUpCandidateBuilder",
+    "RadarFollowUpCandidate",
+    "RadarFollowUpCandidateInvariantError",
+    "RadarFollowUpCandidateSet",
+]
