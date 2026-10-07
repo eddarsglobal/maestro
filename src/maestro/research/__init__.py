@@ -122,3 +122,15 @@ __all__ += [
     "SourceQualityReproducibilityEvaluator",
     "SourceQualityReproducibilityInvariantError",
 ]
+
+from .security_risk import (
+    SecurityRiskEvaluation,
+    SecurityRiskEvaluator,
+    SecurityRiskInvariantError,
+)
+
+__all__ += [
+    "SecurityRiskEvaluation",
+    "SecurityRiskEvaluator",
+    "SecurityRiskInvariantError",
+]
