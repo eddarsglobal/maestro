@@ -158,3 +158,17 @@ __all__ += [
     "RadarEvaluationContext",
     "RadarEvaluationResult",
 ]
+
+from .radar_portfolio import (
+    GovernedRadarPortfolio,
+    RadarPortfolioEntry,
+    RadarPortfolioInvariantError,
+    RadarPortfolioResult,
+)
+
+__all__ += [
+    "GovernedRadarPortfolio",
+    "RadarPortfolioEntry",
+    "RadarPortfolioInvariantError",
+    "RadarPortfolioResult",
+]
