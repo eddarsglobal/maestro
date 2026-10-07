@@ -134,3 +134,15 @@ __all__ += [
     "SecurityRiskEvaluator",
     "SecurityRiskInvariantError",
 ]
+
+from .radar_factor_composition import (
+    RadarFactorComposition,
+    RadarFactorComposer,
+    RadarFactorCompositionInvariantError,
+)
+
+__all__ += [
+    "RadarFactorComposition",
+    "RadarFactorComposer",
+    "RadarFactorCompositionInvariantError",
+]
