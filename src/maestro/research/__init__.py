@@ -98,3 +98,15 @@ __all__ += [
     "NoveltyRelevanceEvaluator",
     "NoveltyRelevanceInvariantError",
 ]
+
+from .capability_integration import (
+    CapabilityIntegrationEvaluation,
+    CapabilityIntegrationEvaluator,
+    CapabilityIntegrationInvariantError,
+)
+
+__all__ += [
+    "CapabilityIntegrationEvaluation",
+    "CapabilityIntegrationEvaluator",
+    "CapabilityIntegrationInvariantError",
+]
