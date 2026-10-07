@@ -110,3 +110,15 @@ __all__ += [
     "CapabilityIntegrationEvaluator",
     "CapabilityIntegrationInvariantError",
 ]
+
+from .source_quality_reproducibility import (
+    SourceQualityReproducibilityEvaluation,
+    SourceQualityReproducibilityEvaluator,
+    SourceQualityReproducibilityInvariantError,
+)
+
+__all__ += [
+    "SourceQualityReproducibilityEvaluation",
+    "SourceQualityReproducibilityEvaluator",
+    "SourceQualityReproducibilityInvariantError",
+]
