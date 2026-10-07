@@ -92,23 +92,9 @@ class AutonomousRuntime:
         ) = None
 
         if web_research_binding is not None:
-            self.research = (
-                compose_governed_web_research(
-                    tools=self.kernel.tools,
-                    binding=(
-                        web_research_binding
-                    ),
-                )
+            self.activate_web_research(
+                web_research_binding
             )
-
-            self.research_evidence = (
-                ResearchEvidenceStore(
-                    self.runtime_dir
-                    / "research_evidence.sqlite3"
-                )
-            )
-
-            self._hydrate_research_evidence()
 
         self.events = EventStore(self.runtime_dir / "events.jsonl")
         self.missions = MissionStore(self.runtime_dir / "missions")
@@ -117,6 +103,56 @@ class AutonomousRuntime:
         self.executor = CouncilExecutor()
         self.shadow = LiveShadowEvaluator()
         self.recovery = RecoveryManager(self.missions, self.events)
+
+    def activate_web_research(
+        self,
+        binding: GovernedWebFetchBinding,
+    ) -> None:
+        """
+        Explicitly activate governed Web Research
+        after runtime construction.
+
+        Default construction remains Web-OFF.
+        The caller must supply the governed binding;
+        this method never creates Web authority
+        implicitly.
+        """
+
+        if not isinstance(
+            binding,
+            GovernedWebFetchBinding,
+        ):
+            raise TypeError(
+                "binding must be a "
+                "GovernedWebFetchBinding."
+            )
+
+        if (
+            self.research is not None
+            or self.research_evidence
+            is not None
+        ):
+            raise RuntimeError(
+                "Web research is already "
+                "activated."
+            )
+
+        store = ResearchEvidenceStore(
+            self.runtime_dir
+            / "research_evidence.sqlite3"
+        )
+
+        composition = (
+            compose_governed_web_research(
+                tools=self.kernel.tools,
+                binding=binding,
+            )
+        )
+
+        self.research = composition
+        self.research_evidence = store
+
+        self._hydrate_research_evidence()
 
     def _hydrate_research_evidence(
         self,
