@@ -420,3 +420,25 @@ __all__ += [
     "RadarFollowUpCycleGateInvariantError",
     "RadarFollowUpCycleGateResult",
 ]
+
+from .radar_research_cycle_governance import (
+    MAX_RADAR_FOLLOWUP_CYCLES,
+    GovernedRadarFollowUpCycleGovernor,
+    RadarFollowUpCycleContext,
+    RadarFollowUpCycleGovernanceDisposition,
+    RadarFollowUpCycleGovernanceEntry,
+    RadarFollowUpCycleGovernanceInvariantError,
+    RadarFollowUpCycleGovernanceResult,
+    RadarFollowUpCyclePolicy,
+)
+
+__all__ += [
+    "MAX_RADAR_FOLLOWUP_CYCLES",
+    "GovernedRadarFollowUpCycleGovernor",
+    "RadarFollowUpCycleContext",
+    "RadarFollowUpCycleGovernanceDisposition",
+    "RadarFollowUpCycleGovernanceEntry",
+    "RadarFollowUpCycleGovernanceInvariantError",
+    "RadarFollowUpCycleGovernanceResult",
+    "RadarFollowUpCyclePolicy",
+]
