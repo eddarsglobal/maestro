@@ -390,3 +390,17 @@ __all__ += [
     "RadarResearchProviderReturnAdmissionResult",
     "RadarResearchProviderReturnPacket",
 ]
+
+from .radar_research_evidence_reintegration import (
+    GovernedRadarResearchEvidenceReintegrator,
+    RadarResearchEvidenceReintegrationEntry,
+    RadarResearchEvidenceReintegrationError,
+    RadarResearchEvidenceReintegrationResult,
+)
+
+__all__ += [
+    "GovernedRadarResearchEvidenceReintegrator",
+    "RadarResearchEvidenceReintegrationEntry",
+    "RadarResearchEvidenceReintegrationError",
+    "RadarResearchEvidenceReintegrationResult",
+]
