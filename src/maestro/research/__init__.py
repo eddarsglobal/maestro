@@ -330,3 +330,17 @@ __all__ += [
     "RadarResearchRequestMaterializationEntry",
     "RadarResearchRequestMaterializationInvariantError",
 ]
+
+from .radar_research_routing import (
+    GovernedRadarResearchRouter,
+    RadarResearchRoutingEntry,
+    RadarResearchRoutingInvariantError,
+    RadarResearchRoutingResult,
+)
+
+__all__ += [
+    "GovernedRadarResearchRouter",
+    "RadarResearchRoutingEntry",
+    "RadarResearchRoutingInvariantError",
+    "RadarResearchRoutingResult",
+]
