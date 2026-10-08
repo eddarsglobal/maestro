@@ -372,3 +372,21 @@ __all__ += [
     "RadarResearchExactExecutionInvariantError",
     "RadarResearchExactExecutionResult",
 ]
+
+from .radar_research_return_admission import (
+    RADAR_RESEARCH_PROVIDER_RETURN_SCHEMA,
+    GovernedRadarResearchProviderReturnAdmission,
+    RadarResearchProviderReturnAdmissionEntry,
+    RadarResearchProviderReturnAdmissionError,
+    RadarResearchProviderReturnAdmissionResult,
+    RadarResearchProviderReturnPacket,
+)
+
+__all__ += [
+    "RADAR_RESEARCH_PROVIDER_RETURN_SCHEMA",
+    "GovernedRadarResearchProviderReturnAdmission",
+    "RadarResearchProviderReturnAdmissionEntry",
+    "RadarResearchProviderReturnAdmissionError",
+    "RadarResearchProviderReturnAdmissionResult",
+    "RadarResearchProviderReturnPacket",
+]
