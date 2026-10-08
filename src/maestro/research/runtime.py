@@ -334,6 +334,134 @@ class GovernedResearchRuntime:
             is ToolExecutionStatus.FAILED
         )
 
+    def execute_exact(
+        self,
+        request: ResearchRequest,
+        decision: ResearchRoutingDecision,
+    ) -> ResearchExecutionResult:
+        """
+        Execute one already-routed research decision.
+
+        This primitive NEVER calls route() and NEVER
+        performs provider fallback.
+
+        It preserves the exact provider/tool decision
+        supplied by the governed caller, while
+        re-checking current provider eligibility and
+        ToolRegistry governance immediately before
+        invocation.
+
+        Execution does not imply verification, truth,
+        evidence admission, learning, promotion, or
+        activation.
+        """
+
+        if not isinstance(
+            request,
+            ResearchRequest,
+        ):
+            raise TypeError(
+                "request must be a "
+                "ResearchRequest."
+            )
+
+        if not isinstance(
+            decision,
+            ResearchRoutingDecision,
+        ):
+            raise TypeError(
+                "decision must be a "
+                "ResearchRoutingDecision."
+            )
+
+        if (
+            decision.provider_id
+            not in decision.candidates
+        ):
+            raise (
+                ResearchRuntimeConfigurationError(
+                    "Exact execution requires the "
+                    "selected provider to remain "
+                    "inside the routing candidates."
+                )
+            )
+
+        eligible = self.providers.eligible(
+            request.capability,
+            forbidden_provider_ids=(
+                request.forbidden_provider_ids
+            ),
+        )
+
+        selected = next(
+            (
+                descriptor
+                for descriptor in eligible
+                if descriptor.provider_id
+                == decision.provider_id
+            ),
+            None,
+        )
+
+        if selected is None:
+            raise (
+                ResearchRuntimeConfigurationError(
+                    "Pre-routed research provider "
+                    "is no longer eligible."
+                )
+            )
+
+        if (
+            selected.tool_name_for(
+                request.capability
+            )
+            != decision.tool_name
+        ):
+            raise (
+                ResearchRuntimeConfigurationError(
+                    "Pre-routed research provider/"
+                    "tool binding changed before "
+                    "exact execution."
+                )
+            )
+
+        # Revalidate governance immediately before
+        # invocation. This closes the stale-handoff
+        # gap without changing the provider.
+        self._validate_tool(
+            request,
+            decision,
+        )
+
+        output = self.tools.invoke(
+            task_id=request.task_id,
+            actor=CouncilId.RX,
+            tool_name=decision.tool_name,
+            arguments=(
+                _thaw_research_json(
+                    request.arguments
+                )
+            ),
+        )
+
+        attempt = ResearchExecutionAttempt(
+            attempt_number=1,
+            provider_id=decision.provider_id,
+            tool_name=decision.tool_name,
+            status=(
+                ResearchAttemptStatus.SUCCEEDED
+            ),
+        )
+
+        return ResearchExecutionResult(
+            task_id=request.task_id,
+            capability=request.capability,
+            provider_id=decision.provider_id,
+            tool_name=decision.tool_name,
+            output=output,
+            attempts=(attempt,),
+        )
+
     def execute(
         self,
         request: ResearchRequest,

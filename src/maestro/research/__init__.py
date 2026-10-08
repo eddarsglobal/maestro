@@ -358,3 +358,17 @@ __all__ += [
     "RadarResearchExecutionHandoffEntry",
     "RadarResearchExecutionHandoffInvariantError",
 ]
+
+from .radar_research_exact_execution import (
+    GovernedRadarResearchExactExecutor,
+    RadarResearchExactExecutionEntry,
+    RadarResearchExactExecutionInvariantError,
+    RadarResearchExactExecutionResult,
+)
+
+__all__ += [
+    "GovernedRadarResearchExactExecutor",
+    "RadarResearchExactExecutionEntry",
+    "RadarResearchExactExecutionInvariantError",
+    "RadarResearchExactExecutionResult",
+]
