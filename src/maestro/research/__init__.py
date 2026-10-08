@@ -404,3 +404,19 @@ __all__ += [
     "RadarResearchEvidenceReintegrationError",
     "RadarResearchEvidenceReintegrationResult",
 ]
+
+from .radar_research_followup_cycle_gate import (
+    GovernedRadarFollowUpCycleGate,
+    RadarFollowUpCycleDisposition,
+    RadarFollowUpCycleGateEntry,
+    RadarFollowUpCycleGateInvariantError,
+    RadarFollowUpCycleGateResult,
+)
+
+__all__ += [
+    "GovernedRadarFollowUpCycleGate",
+    "RadarFollowUpCycleDisposition",
+    "RadarFollowUpCycleGateEntry",
+    "RadarFollowUpCycleGateInvariantError",
+    "RadarFollowUpCycleGateResult",
+]
