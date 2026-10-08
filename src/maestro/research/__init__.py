@@ -270,3 +270,17 @@ __all__ += [
     "RadarFollowUpCandidateInvariantError",
     "RadarFollowUpCandidateSet",
 ]
+
+from .radar_research_request_draft import (
+    GovernedRadarResearchRequestDraftBuilder,
+    RadarResearchRequestDraftEntry,
+    RadarResearchRequestDraftInvariantError,
+    RadarResearchRequestDraftSet,
+)
+
+__all__ += [
+    "GovernedRadarResearchRequestDraftBuilder",
+    "RadarResearchRequestDraftEntry",
+    "RadarResearchRequestDraftInvariantError",
+    "RadarResearchRequestDraftSet",
+]
