@@ -302,3 +302,17 @@ __all__ += [
     "RadarResearchDraftAdmissionResult",
     "RadarResearchDraftAdmissionStatus",
 ]
+
+from .radar_research_task_binding import (
+    GovernedRadarResearchTaskBinder,
+    RadarResearchTaskBinding,
+    RadarResearchTaskBindingEntry,
+    RadarResearchTaskBindingInvariantError,
+)
+
+__all__ += [
+    "GovernedRadarResearchTaskBinder",
+    "RadarResearchTaskBinding",
+    "RadarResearchTaskBindingEntry",
+    "RadarResearchTaskBindingInvariantError",
+]
