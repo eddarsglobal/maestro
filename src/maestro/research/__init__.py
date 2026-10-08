@@ -316,3 +316,17 @@ __all__ += [
     "RadarResearchTaskBindingEntry",
     "RadarResearchTaskBindingInvariantError",
 ]
+
+from .radar_research_request_materialization import (
+    GovernedRadarResearchRequestMaterializer,
+    RadarResearchRequestMaterialization,
+    RadarResearchRequestMaterializationEntry,
+    RadarResearchRequestMaterializationInvariantError,
+)
+
+__all__ += [
+    "GovernedRadarResearchRequestMaterializer",
+    "RadarResearchRequestMaterialization",
+    "RadarResearchRequestMaterializationEntry",
+    "RadarResearchRequestMaterializationInvariantError",
+]
