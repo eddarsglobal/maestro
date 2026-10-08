@@ -284,3 +284,21 @@ __all__ += [
     "RadarResearchRequestDraftInvariantError",
     "RadarResearchRequestDraftSet",
 ]
+
+from .radar_research_draft_admission import (
+    GovernedRadarResearchDraftAdmissionGate,
+    RadarResearchDraftAdmissionEntry,
+    RadarResearchDraftAdmissionInvariantError,
+    RadarResearchDraftAdmissionPolicy,
+    RadarResearchDraftAdmissionResult,
+    RadarResearchDraftAdmissionStatus,
+)
+
+__all__ += [
+    "GovernedRadarResearchDraftAdmissionGate",
+    "RadarResearchDraftAdmissionEntry",
+    "RadarResearchDraftAdmissionInvariantError",
+    "RadarResearchDraftAdmissionPolicy",
+    "RadarResearchDraftAdmissionResult",
+    "RadarResearchDraftAdmissionStatus",
+]
