@@ -456,3 +456,17 @@ __all__ += [
     "RadarReevaluationStartInvariantError",
     "RadarReevaluationStartResult",
 ]
+
+from .radar_research_portfolio_reintegration import (
+    GovernedRadarReevaluationPortfolioReintegrator,
+    RadarReevaluationPortfolioEntry,
+    RadarReevaluationPortfolioReintegrationInvariantError,
+    RadarReevaluationPortfolioReintegrationResult,
+)
+
+__all__ += [
+    "GovernedRadarReevaluationPortfolioReintegrator",
+    "RadarReevaluationPortfolioEntry",
+    "RadarReevaluationPortfolioReintegrationInvariantError",
+    "RadarReevaluationPortfolioReintegrationResult",
+]
