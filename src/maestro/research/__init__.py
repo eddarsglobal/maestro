@@ -470,3 +470,17 @@ __all__ += [
     "RadarReevaluationPortfolioReintegrationInvariantError",
     "RadarReevaluationPortfolioReintegrationResult",
 ]
+
+from .radar_research_reevaluation_decision import (
+    GovernedRadarReevaluationDecisionMaker,
+    RadarReevaluationDecisionEntry,
+    RadarReevaluationDecisionInvariantError,
+    RadarReevaluationDecisionResult,
+)
+
+__all__ += [
+    "GovernedRadarReevaluationDecisionMaker",
+    "RadarReevaluationDecisionEntry",
+    "RadarReevaluationDecisionInvariantError",
+    "RadarReevaluationDecisionResult",
+]
