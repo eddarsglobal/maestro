@@ -540,3 +540,17 @@ __all__ += [
     "RadarReevaluationEvidenceFollowUpInvariantError",
     "RadarReevaluationEvidenceFollowUpResult",
 ]
+
+from .radar_research_reevaluation_followup_candidate import (
+    GovernedRadarReevaluationFollowUpCandidate,
+    RadarReevaluationFollowUpCandidateEntry,
+    RadarReevaluationFollowUpCandidateInvariantError,
+    RadarReevaluationFollowUpCandidateResult,
+)
+
+__all__ += [
+    "GovernedRadarReevaluationFollowUpCandidate",
+    "RadarReevaluationFollowUpCandidateEntry",
+    "RadarReevaluationFollowUpCandidateInvariantError",
+    "RadarReevaluationFollowUpCandidateResult",
+]
