@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from maestro.sovereign import IntelligenceCapability
 
 from maestro.os.operating_system import MaestroOperatingSystem
 from maestro.genesis.boot import BootValidator
@@ -96,11 +97,54 @@ class ProductionGenesisSystem:
             "blocked": 0,
         }
 
+        intelligence_registry = self.sovereign_intelligence.registry
+        intelligence_resources = intelligence_registry.all()
+        degraded_state = self.sovereign_intelligence.degraded.assess(
+            intelligence_registry
+        )
+
+        available_capability_set = set(
+            degraded_state.available_capabilities
+        )
+        available_capabilities = sorted(
+            available_capability_set
+        )
+        known_capabilities = sorted(
+            capability.value
+            for capability in IntelligenceCapability
+        )
+        unavailable_capabilities = [
+            capability
+            for capability in known_capabilities
+            if capability not in available_capability_set
+        ]
+
+        available_resources = sum(
+            1
+            for resource in intelligence_resources
+            if resource.status.value != "UNAVAILABLE"
+        )
+
+        intelligence_state = (
+            "SOVEREIGN_DEGRADED"
+            if available_resources == 0
+            else degraded_state.level.value
+        )
+
         return {
             "version": self.VERSION,
             "status": "READY",
             "boot": boot,
             "runtime_recovery": summary,
+            "intelligence": {
+                "state": intelligence_state,
+                "level": degraded_state.level.value,
+                "available_resources": available_resources,
+                "registered_resources": len(intelligence_resources),
+                "available_capabilities": available_capabilities,
+                "unavailable_capabilities": unavailable_capabilities,
+                "reason": degraded_state.reason,
+            },
         }
     def health_report(self):
         return self.health.inspect(runtime_dir=self.runtime_dir)
