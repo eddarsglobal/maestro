@@ -25,7 +25,19 @@ from .genesis import *
 
 __version__ = "1.1.0"
 
-from .local_intelligence import LocalIntelligence
+# LocalIntelligence is a platform-specific compatibility edge.
+# Keep its public import available lazily without making Ollama
+# part of MAESTRO core package initialization.
+def __getattr__(name: str):
+    if name == "LocalIntelligence":
+        from .local_intelligence import LocalIntelligence
+        return LocalIntelligence
+
+    raise AttributeError(
+        f"module {__name__!r} has no attribute {name!r}"
+    )
+
+
 
 from .sovereign import *
 

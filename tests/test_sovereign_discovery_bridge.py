@@ -2,7 +2,7 @@ import unittest
 
 from maestro.providers.ollama.models import OllamaModelInfo
 from maestro.providers.ollama.provider import OllamaProviderAdapter
-from maestro.sovereign.discovery import SovereignDiscoveryBridge
+from maestro.providers.ollama.sovereign_discovery_bridge import OllamaSovereignDiscoveryBridge
 from maestro.sovereign.registry import IntelligenceResourceRegistry
 
 
@@ -35,7 +35,7 @@ class SovereignDiscoveryBridgeTests(unittest.TestCase):
     def test_import_ollama_resource(self):
         reg = IntelligenceResourceRegistry()
         provider = OllamaProviderAdapter(FakeClient())
-        ids = SovereignDiscoveryBridge().import_ollama(reg, FakeDiscovery(), provider)
+        ids = OllamaSovereignDiscoveryBridge().import_ollama(reg, FakeDiscovery(), provider)
         self.assertEqual(ids, ["ollama::tiny:latest"])
         self.assertEqual(len(reg.all()), 1)
 

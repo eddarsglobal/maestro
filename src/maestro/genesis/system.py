@@ -6,7 +6,6 @@ from maestro.sovereign import IntelligenceCapability
 from maestro.os.operating_system import MaestroOperatingSystem
 from maestro.genesis.boot import BootValidator
 from maestro.genesis.health import HealthInspector
-from maestro.local_intelligence import LocalIntelligence
 from maestro.sovereign import SovereignIntelligenceRuntime
 from maestro.intelligence_market import IntelligenceMarket
 from maestro.cognitive_fabric import CognitiveFabric
@@ -36,7 +35,11 @@ class ProductionGenesisSystem:
         self.boot = BootValidator()
         self.health = HealthInspector()
         self.os = MaestroOperatingSystem(self.runtime_dir / "os")
-        self.local_intelligence = LocalIntelligence.ollama()
+        # Platform-specific intelligence is not part of sovereign
+        # Genesis identity. Explicit external composition may bind
+        # a compatibility edge later; zero-platform boot remains
+        # sovereign and valid.
+        self.local_intelligence = None
         self.sovereign_intelligence = SovereignIntelligenceRuntime()
         self.intelligence_market = IntelligenceMarket(self.sovereign_intelligence.registry)
         self.cognitive_fabric = CognitiveFabric(self.sovereign_intelligence, self.intelligence_market)

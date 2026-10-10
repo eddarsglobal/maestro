@@ -1,37 +1,72 @@
 from __future__ import annotations
 
-from maestro.providers.ollama.discovery import OllamaDiscovery
-from maestro.providers.ollama.provider import OllamaProviderAdapter
-from maestro.providers.ollama.sovereign_adapter import (
-    OllamaSovereignResourceAdapter,
-    descriptor_from_ollama,
+from collections.abc import Iterable
+
+from .contracts import (
+    IntelligenceResourceAdapter,
+    ResourceDescriptor,
 )
 from .registry import IntelligenceResourceRegistry
 
 
 class SovereignDiscoveryBridge:
     """
-    Imports provider-discovered models into MAESTRO's provider-neutral registry.
+    Provider-neutral compatibility bridge into the sovereign registry.
 
-    This bridge is intentionally outside sovereign core initialization so that
-    provider packages never become a dependency of MAESTRO's identity.
+    Provider-specific discovery, descriptor projection and adapter
+    construction belong outside this module. This bridge only accepts
+    already constructed generic sovereign descriptor/adapter bindings.
+
+    REGISTER != TRUST != ACTIVATE != EXECUTE.
     """
 
-    def import_ollama(
+    def register_bindings(
         self,
         registry: IntelligenceResourceRegistry,
-        discovery: OllamaDiscovery,
-        provider: OllamaProviderAdapter,
+        bindings: Iterable[
+            tuple[
+                ResourceDescriptor,
+                IntelligenceResourceAdapter,
+            ]
+        ],
     ) -> list[str]:
-        registered = []
-        for model in discovery.list_models():
-            descriptor = descriptor_from_ollama(model)
+        if not isinstance(
+            registry,
+            IntelligenceResourceRegistry,
+        ):
+            raise TypeError(
+                "registry must be IntelligenceResourceRegistry."
+            )
+
+        registered: list[str] = []
+
+        for descriptor, adapter in bindings:
+            if not isinstance(
+                descriptor,
+                ResourceDescriptor,
+            ):
+                raise TypeError(
+                    "descriptor must be ResourceDescriptor."
+                )
+
             if not descriptor.capabilities:
                 continue
-            adapter = OllamaSovereignResourceAdapter(model, provider)
+
             try:
-                registry.register(descriptor, adapter)
-                registered.append(descriptor.resource_id)
+                registry.register(
+                    descriptor,
+                    adapter,
+                )
             except ValueError:
-                pass
+                continue
+
+            registered.append(
+                descriptor.resource_id
+            )
+
         return registered
+
+
+__all__ = [
+    "SovereignDiscoveryBridge",
+]
