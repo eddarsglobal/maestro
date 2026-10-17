@@ -48,6 +48,10 @@ from .recovery import RecoveryManager
 from .shadow import LiveShadowEvaluator
 
 
+class ResearchFetchCancelled(RuntimeError):
+    """Cancellation observed before durable research evidence publication."""
+
+
 class AutonomousRuntime:
     """
     Production-shaped orchestration runtime around the MAESTRO kernel.
@@ -202,6 +206,8 @@ class AutonomousRuntime:
         self,
         mission: Mission,
         url: str,
+        *,
+        cancellation=None,
     ) -> Evidence:
         """
         Execute one governed RX Web fetch for an
@@ -243,6 +249,9 @@ class AutonomousRuntime:
                 "this runtime."
             )
 
+        if cancellation is not None and cancellation.is_set():
+            raise ResearchFetchCancelled("Research cancelled before external fetch")
+
         provider = (
             self.research.providers
             .descriptor(
@@ -271,6 +280,12 @@ class AutonomousRuntime:
                 )
             )
         )
+
+        # The network request may not itself support cancellation. Never
+        # materialize the response as durable evidence when cancellation was
+        # requested while the governed transport was running.
+        if cancellation is not None and cancellation.is_set():
+            raise ResearchFetchCancelled("Research cancelled during external fetch")
 
         if (
             result.provider_id
@@ -345,6 +360,12 @@ class AutonomousRuntime:
                 ],
             )
         )
+
+        # Final cooperative checkpoint before durable evidence publication.
+        # A simultaneous later cancellation may still be too late; the
+        # Gateway also checks before mission TX authorization.
+        if cancellation is not None and cancellation.is_set():
+            raise ResearchFetchCancelled("Research cancelled before evidence publication")
 
         # Durable first: a process interruption
         # after this point remains recoverable
