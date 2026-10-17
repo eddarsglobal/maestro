@@ -1,0 +1,62 @@
+name: MAESTRO Core - Development CI
+
+on:
+  push:
+    branches:
+      - 'dev/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-regressions:
+    name: Core Python regressions (not production certification)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Core
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install declared dependencies, if any
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f requirements.txt ]]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [[ -f pyproject.toml || -f setup.py ]]; then
+            python -m pip install -e .
+          fi
+      - name: Run complete Core unittest suite; require 1407+
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          set -euo pipefail
+          LOG="$RUNNER_TEMP/maestro-core-tests.log"
+          if ! python -m unittest discover -s tests -p 'test_*.py' -q > "$LOG" 2>&1; then
+            tail -n 150 "$LOG"
+            exit 1
+          fi
+          tail -n 25 "$LOG"
+          python - "$LOG" <<'PY'
+          import pathlib, re, sys
+          content = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
+          found = re.findall(r'Ran (\d+) tests? in ', content)
+          assert found and int(found[-1]) >= 1407, f'Core coverage too low or missing summary: {found!r}'
+          print(f'CORE FULL REGRESSION PASS: {found[-1]} tests')
+          PY
