@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import threading
 from contextlib import contextmanager
-from contextvars import ContextVar
 import http.client
 import socket
 import ssl
@@ -13,7 +12,9 @@ from ipaddress import ip_address
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
+from .cancellation import ACTIVE_HTTP_CANCELLATION as _ACTIVE_HTTP_CANCELLATION
 from .connector import (
+    SourceConnectionCancelled,
     BoundSourceConnection,
     BoundSourceConnector,
 )
@@ -51,11 +52,6 @@ class SourceTransportInvariantError(
 
 class SourceTransportCancelled(SourceTransportError):
     """Cancellation observed: the governed response must not be delivered."""
-
-
-_ACTIVE_HTTP_CANCELLATION: ContextVar = ContextVar(
-    "maestro_governed_http_mission_cancellation", default=None
-)
 
 
 @contextmanager
@@ -1182,7 +1178,12 @@ class GovernedHTTPTransport:
 
         cancellation = _ACTIVE_HTTP_CANCELLATION.get()
         _raise_if_cancelled(cancellation)
-        bound = self.connector.connect_url(url)
+        try:
+            bound = self.connector.connect_url(url)
+        except SourceConnectionCancelled as exc:
+            raise SourceTransportCancelled(
+                "Governed HTTP request cancelled during DNS/TCP connect"
+            ) from exc
         if cancellation is not None and cancellation.is_set():
             # DNS/TCP binding is still connector-owned and may block;
             # never hand a late connected socket into HTTP.

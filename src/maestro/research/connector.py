@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import errno
+import os
+import select
 import socket
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from ipaddress import ip_address
 from typing import Any
 
+from .cancellation import ACTIVE_HTTP_CANCELLATION
 from .resolver import (
     GovernedSourceResolver,
     NumericSourceEndpoint,
@@ -18,7 +23,13 @@ from .source_access import (
 )
 
 
-BOUND_SOURCE_CONNECTOR_VERSION = "RX0.3B2A"
+BOUND_SOURCE_CONNECTOR_VERSION = "RX0.3B2A-G1P0A232"
+
+# getaddrinfo is not portably killable. At most four background DNS calls
+# may remain after cancellation; each releases its permit on actual return.
+_DNS_SLOTS = threading.BoundedSemaphore(4)
+_DNS_POLL_SECONDS = 0.05
+_TCP_POLL_SECONDS = 0.05
 
 
 class SourceConnectionInvariantError(
@@ -52,6 +63,10 @@ class SourceConnectionError(
     ):
         super().__init__(message)
         self.attempts = tuple(attempts)
+
+
+class SourceConnectionCancelled(SourceConnectionError):
+    """Mission cancellation at the DNS/TCP boundary; no network fallback."""
 
 
 @dataclass(
@@ -341,9 +356,88 @@ class BoundSourceConnector:
 
         return canonical, endpoints
 
+    @staticmethod
+    def _cancel_if_set(cancellation) -> None:
+        if cancellation is not None and cancellation.is_set():
+            raise SourceConnectionCancelled("Source connection cancelled.")
+
+    def _resolve_interruptibly(self, resolve, cancellation, deadline):
+        """Bound caller wait; the OS getaddrinfo itself may finish later.
+
+        No late DNS result is ever used to authorize a TCP connection. The
+        global semaphore prevents unbounded abandoned resolver threads.
+        """
+        self._cancel_if_set(cancellation)
+        if not _DNS_SLOTS.acquire(blocking=False):
+            raise SourceConnectionError("DNS worker capacity exhausted.")
+        finished = threading.Event()
+        outcome = {}
+
+        def worker():
+            try:
+                outcome["value"] = resolve()
+            except BaseException as exc:
+                outcome["error"] = exc
+            finally:
+                _DNS_SLOTS.release()
+                finished.set()
+
+        try:
+            threading.Thread(target=worker, daemon=True,
+                             name="maestro-governed-dns").start()
+        except BaseException:
+            _DNS_SLOTS.release()
+            raise
+        while True:
+            self._cancel_if_set(cancellation)
+            remaining = deadline - float(self._monotonic())
+            if remaining <= 0:
+                raise SourceConnectionError("DNS/TCP connection budget exhausted.")
+            if finished.wait(min(_DNS_POLL_SECONDS, remaining)):
+                break
+        self._cancel_if_set(cancellation)
+        if float(self._monotonic()) >= deadline:
+            raise SourceConnectionError("DNS/TCP connection budget exhausted.")
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["value"]
+
+    def _connect_socket_cancellable(self, sock, sockaddr, cancellation, deadline):
+        """Poll a native nonblocking TCP socket; never pass a hostname."""
+        sock.setblocking(False)
+        pending = {errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK,
+                   errno.EINTR}
+        code = sock.connect_ex(sockaddr)
+        if code not in (0, errno.EISCONN):
+            if code not in pending:
+                raise OSError(code, os.strerror(code))
+            while True:
+                self._cancel_if_set(cancellation)
+                remaining = deadline - float(self._monotonic())
+                if remaining <= 0:
+                    raise TimeoutError("TCP connection budget exhausted.")
+                _, ready, exceptional = select.select(
+                    [], [sock], [sock], min(_TCP_POLL_SECONDS, remaining)
+                )
+                self._cancel_if_set(cancellation)
+                if ready or exceptional:
+                    err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                    if err in (0, errno.EISCONN):
+                        break
+                    if err not in pending:
+                        raise OSError(err, os.strerror(err))
+        self._cancel_if_set(cancellation)
+        remaining = deadline - float(self._monotonic())
+        if remaining <= 0:
+            raise TimeoutError("TCP connection budget exhausted.")
+        sock.settimeout(remaining)
+
     def _connect_resolution(
         self,
         resolution: SourceResolution,
+        *,
+        cancellation=None,
+        deadline=None,
     ) -> BoundSourceConnection:
         target, endpoints = (
             self._revalidate_resolution(
@@ -351,10 +445,9 @@ class BoundSourceConnector:
             )
         )
 
-        deadline = (
-            float(self._monotonic())
-            + self.policy.timeout_seconds
-        )
+        if deadline is None:
+            deadline = float(self._monotonic()) + self.policy.timeout_seconds
+        self._cancel_if_set(cancellation)
 
         attempts: list[
             SourceConnectionAttempt
@@ -363,6 +456,7 @@ class BoundSourceConnector:
         last_error: Exception | None = None
 
         for endpoint in endpoints:
+            self._cancel_if_set(cancellation)
             # Revalidate each endpoint immediately
             # before a connect attempt.
             single = (
@@ -404,17 +498,24 @@ class BoundSourceConnector:
                     int(socket.IPPROTO_TCP),
                 )
 
-                sock.settimeout(
-                    remaining
-                )
+                # Numeric sockaddr only; no hostname reaches the OS connect.
+                # Preserve injected legacy socket doubles in regular tests.
+                if cancellation is not None and isinstance(sock, socket.socket):
+                    self._connect_socket_cancellable(
+                        sock, endpoint.sockaddr, cancellation, deadline
+                    )
+                else:
+                    sock.settimeout(remaining)
+                    self._cancel_if_set(cancellation)
+                    sock.connect(endpoint.sockaddr)
 
-                # Numeric sockaddr only.
-                # No hostname reaches connect().
-                sock.connect(
-                    endpoint.sockaddr
-                )
+            except SourceConnectionCancelled:
+                self._safe_close(sock)
+                raise
 
             except OSError as exc:
+                self._safe_close(sock)
+                self._cancel_if_set(cancellation)
                 last_error = exc
 
                 attempts.append(
@@ -434,6 +535,12 @@ class BoundSourceConnector:
                 # are terminal. They must never
                 # masquerade as endpoint failure
                 # and trigger network fallback.
+                self._safe_close(sock)
+                raise
+
+            try:
+                self._cancel_if_set(cancellation)
+            except SourceConnectionCancelled:
                 self._safe_close(sock)
                 raise
 
@@ -482,28 +589,34 @@ class BoundSourceConnector:
         self,
         url: str,
     ) -> BoundSourceConnection:
-        resolution = (
-            self.resolver.resolve_url(
-                url
-            )
+        cancellation = ACTIVE_HTTP_CANCELLATION.get()
+        self._cancel_if_set(cancellation)
+        if cancellation is None:
+            resolution = self.resolver.resolve_url(url)
+            return self._connect_resolution(resolution)
+        deadline = float(self._monotonic()) + self.policy.timeout_seconds
+        resolution = self._resolve_interruptibly(
+            lambda: self.resolver.resolve_url(url), cancellation, deadline
         )
-
         return self._connect_resolution(
-            resolution
+            resolution, cancellation=cancellation, deadline=deadline
         )
 
     def connect_target(
         self,
         target: SourceAccessTarget,
     ) -> BoundSourceConnection:
-        resolution = (
-            self.resolver.resolve_target(
-                target
-            )
+        cancellation = ACTIVE_HTTP_CANCELLATION.get()
+        self._cancel_if_set(cancellation)
+        if cancellation is None:
+            resolution = self.resolver.resolve_target(target)
+            return self._connect_resolution(resolution)
+        deadline = float(self._monotonic()) + self.policy.timeout_seconds
+        resolution = self._resolve_interruptibly(
+            lambda: self.resolver.resolve_target(target), cancellation, deadline
         )
-
         return self._connect_resolution(
-            resolution
+            resolution, cancellation=cancellation, deadline=deadline
         )
 
 
@@ -512,6 +625,7 @@ __all__ = [
     "BoundSourceConnection",
     "BoundSourceConnector",
     "SourceConnectionAttempt",
+    "SourceConnectionCancelled",
     "SourceConnectionError",
     "SourceConnectionInvariantError",
 ]

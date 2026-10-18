@@ -40,7 +40,7 @@ jobs:
           if [[ -f pyproject.toml || -f setup.py ]]; then
             python -m pip install -e .
           fi
-      - name: Run complete Core unittest suite; require 1416+
+      - name: Run complete Core unittest suite; require 1426+
         shell: bash
         env:
           PYTHONPATH: ${{ github.workspace }}/src
@@ -57,6 +57,6 @@ jobs:
           import pathlib, re, sys
           content = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
           found = re.findall(r'Ran (\d+) tests? in ', content)
-          assert found and int(found[-1]) >= 1416, f'Core coverage too low or missing summary: {found!r}'
+          assert found and int(found[-1]) >= 1426, f'Core coverage too low or missing summary: {found!r}'
           print(f'CORE FULL REGRESSION PASS: {found[-1]} tests')
           PY
