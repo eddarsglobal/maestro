@@ -22,6 +22,7 @@ from maestro.research.evidence_bridge import (
 from maestro.research.runtime import (
     ResearchRequest,
 )
+from maestro.research.transport import governed_http_cancellation
 from maestro.research.web_fetch import (
     GOVERNED_WEB_FETCH_PROVIDER_ID,
     GovernedWebFetchResult,
@@ -269,21 +270,27 @@ class AutonomousRuntime:
                 "expose exactly one capability."
             )
 
-        result = (
-            self.research.runtime.execute(
-                ResearchRequest(
-                    task_id=mission.task_id,
-                    capability=capabilities[0],
-                    arguments={
-                        "url": url,
-                    },
+        # ContextVar is scoped to this synchronous RX tool invocation only:
+        # other missions, fallback providers and later tasks cannot inherit
+        # the cancellation token after this block exits.
+        try:
+            with governed_http_cancellation(cancellation):
+                result = self.research.runtime.execute(
+                    ResearchRequest(
+                        task_id=mission.task_id,
+                        capability=capabilities[0],
+                        arguments={"url": url},
+                    )
                 )
-            )
-        )
+        except Exception as exc:
+            if cancellation is not None and cancellation.is_set():
+                raise ResearchFetchCancelled(
+                    "Research cancelled during governed external transport"
+                ) from exc
+            raise
 
-        # The network request may not itself support cancellation. Never
-        # materialize the response as durable evidence when cancellation was
-        # requested while the governed transport was running.
+        # Do not materialize a response as durable evidence if cancellation
+        # raced with completion of the governed network transport.
         if cancellation is not None and cancellation.is_set():
             raise ResearchFetchCancelled("Research cancelled during external fetch")
 

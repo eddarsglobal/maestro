@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import threading
+from contextlib import contextmanager
+from contextvars import ContextVar
 import http.client
 import socket
 import ssl
@@ -44,6 +47,80 @@ class SourceTransportInvariantError(
     SourceTransportError
 ):
     pass
+
+
+class SourceTransportCancelled(SourceTransportError):
+    """Cancellation observed: the governed response must not be delivered."""
+
+
+_ACTIVE_HTTP_CANCELLATION: ContextVar = ContextVar(
+    "maestro_governed_http_mission_cancellation", default=None
+)
+
+
+@contextmanager
+def governed_http_cancellation(cancellation):
+    """Bind a mission-local signal across the synchronous RX ToolRegistry call.
+
+    This never grants HTTP authority and never activates Web Research.
+    The context is restored even when an invocation fails.
+    """
+    if cancellation is not None and not callable(getattr(cancellation, "is_set", None)):
+        raise TypeError("cancellation must provide is_set()")
+    token = _ACTIVE_HTTP_CANCELLATION.set(cancellation)
+    try:
+        yield
+    finally:
+        _ACTIVE_HTTP_CANCELLATION.reset(token)
+
+
+def _raise_if_cancelled(cancellation):
+    if cancellation is not None and cancellation.is_set():
+        raise SourceTransportCancelled("Governed HTTP request cancelled")
+
+
+class _ActiveSocketAbort:
+    """Best-effort immediate shutdown of only the current request socket.
+
+    Shutdown wakes blocked HTTP reads on POSIX platforms. The transport's
+    established phase timeout remains authoritative where Python/OpenSSL
+    cannot be interrupted by a cross-thread shutdown. No detached workers.
+    """
+    def __init__(self, cancellation, stream):
+        self._cancellation = cancellation
+        self._stream = stream
+        self._lock = threading.Lock()
+        self._stopped = threading.Event()
+        self._worker = threading.Thread(target=self._watch, daemon=True,
+                                        name="maestro-rx-http-cancel")
+
+    def start(self):
+        self._worker.start()
+
+    def replace_stream(self, stream):
+        with self._lock:
+            self._stream = stream
+
+    def _watch(self):
+        while not self._stopped.wait(0.02):
+            if self._cancellation.is_set():
+                with self._lock:
+                    stream = self._stream
+                if stream is not None:
+                    try:
+                        # socket.socket.shutdown bypasses an SSL wrapper's
+                        # protocol-level shutdown; only transport is aborted.
+                        if isinstance(stream, socket.socket):
+                            socket.socket.shutdown(stream, socket.SHUT_RDWR)
+                        else:
+                            stream.shutdown(socket.SHUT_RDWR)
+                    except (OSError, AttributeError, TypeError):
+                        pass
+                return
+
+    def stop(self):
+        self._stopped.set()
+        self._worker.join(timeout=0.5)
 
 
 class SourceTransportTimeout(
@@ -621,6 +698,7 @@ class GovernedHTTPTransport:
         method: str,
         declared_length: int | None,
         deadline: float,
+        cancellation=None,
     ) -> bytes:
         if method == "HEAD":
             return b""
@@ -634,6 +712,7 @@ class GovernedHTTPTransport:
         total = 0
 
         while True:
+            _raise_if_cancelled(cancellation)
             remaining_capacity = (
                 maximum - total
             )
@@ -668,6 +747,7 @@ class GovernedHTTPTransport:
             self._check_deadline(
                 deadline
             )
+            _raise_if_cancelled(cancellation)
 
             if not chunk:
                 break
@@ -760,6 +840,7 @@ class GovernedHTTPTransport:
         *,
         method: str,
         bound: BoundSourceConnection,
+        cancellation=None,
     ) -> SourceHTTPResponse:
         raw_stream = (
             bound.socket
@@ -774,8 +855,16 @@ class GovernedHTTPTransport:
         connection = None
         response = None
         tls_context = None
+        watcher = (
+            _ActiveSocketAbort(cancellation, raw_stream)
+            if cancellation is not None and raw_stream is not None
+            else None
+        )
 
         try:
+            if watcher is not None:
+                watcher.start()
+            _raise_if_cancelled(cancellation)
             target = self._revalidate_bound(
                 bound
             )
@@ -809,8 +898,17 @@ class GovernedHTTPTransport:
                             server_hostname=(
                                 target.hostname
                             ),
+                            do_handshake_on_connect=False,
                         )
                     )
+                    if watcher is not None:
+                        watcher.replace_stream(stream)
+                    _raise_if_cancelled(cancellation)
+                    # Handshake only after cancellation can address the
+                    # actual SSL socket (raw socket ownership moved).
+                    if isinstance(stream, ssl.SSLSocket):
+                        self._apply_timeout(stream, deadline)
+                        stream.do_handshake()
                 except (
                     ssl.SSLCertVerificationError
                 ) as exc:
@@ -835,6 +933,7 @@ class GovernedHTTPTransport:
                 self._check_deadline(
                     deadline
                 )
+                _raise_if_cancelled(cancellation)
 
                 connection = (
                     http.client
@@ -931,6 +1030,7 @@ class GovernedHTTPTransport:
             self._check_deadline(
                 deadline
             )
+            _raise_if_cancelled(cancellation)
 
             self._apply_timeout(
                 stream,
@@ -965,6 +1065,7 @@ class GovernedHTTPTransport:
             self._check_deadline(
                 deadline
             )
+            _raise_if_cancelled(cancellation)
 
             declared_length = (
                 self._validate_framing(
@@ -1008,6 +1109,7 @@ class GovernedHTTPTransport:
                     declared_length
                 ),
                 deadline=deadline,
+                cancellation=cancellation,
             )
 
             content_types = (
@@ -1023,6 +1125,7 @@ class GovernedHTTPTransport:
                 else None
             )
 
+            _raise_if_cancelled(cancellation)
             return SourceHTTPResponse(
                 target=target,
                 method=method,
@@ -1036,7 +1139,15 @@ class GovernedHTTPTransport:
                 ),
             )
 
+        except Exception as exc:
+            if cancellation is not None and cancellation.is_set():
+                raise SourceTransportCancelled(
+                    "Governed HTTP request cancelled"
+                ) from exc
+            raise
         finally:
+            if watcher is not None:
+                watcher.stop()
             _safe_close(response)
             _safe_close(connection)
 
@@ -1069,20 +1180,25 @@ class GovernedHTTPTransport:
                 "GET and HEAD."
             )
 
-        bound = (
-            self.connector.connect_url(
-                url
-            )
-        )
-
+        cancellation = _ACTIVE_HTTP_CANCELLATION.get()
+        _raise_if_cancelled(cancellation)
+        bound = self.connector.connect_url(url)
+        if cancellation is not None and cancellation.is_set():
+            # DNS/TCP binding is still connector-owned and may block;
+            # never hand a late connected socket into HTTP.
+            _safe_close(bound.socket)
+            raise SourceTransportCancelled("Governed HTTP request cancelled during connect")
         return self._request_bound(
             method=normalized_method,
             bound=bound,
+            cancellation=cancellation,
         )
 
 
 __all__ = [
     "GovernedHTTPTransport",
+    "SourceTransportCancelled",
+    "governed_http_cancellation",
     "SOURCE_HTTP_TRANSPORT_VERSION",
     "SourceHTTPProtocolError",
     "SourceHTTPResponse",
